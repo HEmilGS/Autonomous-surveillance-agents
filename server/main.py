@@ -1,6 +1,6 @@
 from enum import Enum
-from camera import Camera
-from ee import MockEmitter
+from models.camera import Camera
+from models.ee import MockEmitter
 from time import sleep
 
 import datetime
@@ -18,7 +18,7 @@ class Vector():
         self.j = j
         self.k = k
 
-    def add(self, other: Vector) -> Vector:
+    def add(self, other: 'Vector') -> 'Vector':
         return Vector(self.i + other.i, self.j + other.j, self.k + other.k)
 
 class Message():
@@ -208,7 +208,7 @@ class Simulation():
             for a in self.all_agents:
                 a.run()
             
-            sleep(self.dt)
+            # sleep(self.dt)
 
             
 

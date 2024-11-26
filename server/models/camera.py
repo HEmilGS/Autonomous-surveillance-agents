@@ -1,4 +1,4 @@
-from ee import EventEmitter
+from models.ee import EventEmitter
 
 class Camera():
     def __init__(self, server: EventEmitter):
