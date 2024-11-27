@@ -2,6 +2,8 @@ from enum import Enum
 from models.camera import Camera
 from models.ee import MockEmitter, EventEmitter
 from time import sleep
+from uuid import uuid4
+import base64
 
 import datetime
 from typing import Any
@@ -92,7 +94,7 @@ class DroneAgent(Agent):
         self.cameras: list[Camera] = [] + (initial_cameras if initial_cameras is not None else [])
         self.temperature = 0.5
         self.current_picture: str | None = None
-        self.current_drift: Vector(0, 0, 0)
+        self.current_drift = Vector(0, 0, 0)
 
     def get_client_position(self) -> Position:
         """
@@ -177,9 +179,27 @@ class GuardAgent(Agent):
         return
 
     def step(self):
+        print("guard step")
+        last_event = None
+
         while serverconn.check_event("camera_capture"):
-            print("Writing image to disk...")
-            print(serverconn.get_event("camera_capture"))
+            last_event = serverconn.get_event("camera_capture")
+
+
+
+        if last_event is not None:
+            b64img = last_event.split(",")[1]
+            image_data = base64.b64decode(b64img)
+            filename = f"images/image_{uuid4()}.png"
+
+            with open(filename, "wb") as f:
+                f.write(image_data)
+
+
+
+        
+        
+
 
     def take_picture(self):
         return

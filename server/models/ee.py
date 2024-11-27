@@ -72,8 +72,6 @@ class EventEmitter():
         """Check if there are events available without removing them from the queue"""
         if type not in self.event_queues:
             self.register_event_type(type)
-
-        print("event type: ", type)
         
         return not self.event_queues[type].empty()
 
@@ -92,6 +90,7 @@ class EventEmitter():
 
     def handle_events(self):
         """Listen for and handle incoming events."""
+        buffer = ""  # Accumulate partial data here
         while self.running:
             try:
                 # Read data from the connection
@@ -99,25 +98,29 @@ class EventEmitter():
                 if not data:
                     continue
 
-                # Split data into individual messages (in case multiple were received)
-                messages = data.strip().split('\n')
-                for message in messages:
+                # Append incoming data to the buffer
+                buffer += data
+
+                # Process complete messages in the buffer
+                while '\n' in buffer:
+                    # Extract the first complete message
+                    message, buffer = buffer.split('\n', 1)
                     try:
                         event = json.loads(message)
                         event_type = event.get('type')
                         event_data = event.get('data')
 
-                        # Add event to appropriate queue
+                        # Add event to the appropriate queue
                         if event_type not in self.event_queues:
                             self.register_event_type(event_type)
                         
                         self.event_queues[event_type].put(event_data)
-                            
                     except json.JSONDecodeError:
                         print(f"Invalid JSON received: {message}")
             except Exception as e:
                 if self.running:
                     print(f"Error handling events: {e}")
+
 
     def close(self):
         self.running = False
