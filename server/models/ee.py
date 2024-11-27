@@ -72,6 +72,8 @@ class EventEmitter():
         """Check if there are events available without removing them from the queue"""
         if type not in self.event_queues:
             self.register_event_type(type)
+
+        print("event type: ", type)
         
         return not self.event_queues[type].empty()
 

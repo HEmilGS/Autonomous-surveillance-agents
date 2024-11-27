@@ -1,6 +1,6 @@
 from enum import Enum
 from models.camera import Camera
-from models.ee import MockEmitter
+from models.ee import MockEmitter, EventEmitter
 from time import sleep
 
 import datetime
@@ -33,7 +33,7 @@ class DroneOperationMode(Enum):
     AUTONOMOUS = "AUTONOMOUS"
     CONTROLLED = "CONTROLLED"
 
-serverconn = MockEmitter()
+serverconn = EventEmitter()
 
 class Agent():
     """
@@ -141,6 +141,7 @@ class DroneAgent(Agent):
         return
     
     def step(self):
+        print("drone step")
         return
 
     def get_picture(self) -> str | None:
@@ -176,7 +177,9 @@ class GuardAgent(Agent):
         return
 
     def step(self):
-        return
+        while serverconn.check_event("camera_capture"):
+            print("Writing image to disk...")
+            print(serverconn.get_event("camera_capture"))
 
     def take_picture(self):
         return
@@ -194,7 +197,7 @@ class GuardAgent(Agent):
         return
 
 class Simulation():
-    def __init__(self, guard: GuardAgent, drone: DroneAgent, iterations=1000, dt=0.1):
+    def __init__(self, guard: GuardAgent, drone: DroneAgent, iterations=1000, dt=1):
         self.drone = drone
         self.guard = guard
         self.iterations = iterations
@@ -203,12 +206,12 @@ class Simulation():
         self.all_agents: list[Agent] = [guard, drone]
 
     def run(self):
-        for i in range(self.iterations):
+        while True:
             self.current_iterations += 1
             for a in self.all_agents:
                 a.run()
             
-            # sleep(self.dt)
+            sleep(self.dt)
 
             
 
