@@ -69,6 +69,8 @@ public class DroneCameraController : MonoBehaviour
         // Add a Camera component
         Camera fpCamera = cameraObject.AddComponent<Camera>();
         fpCamera.fieldOfView = 60; // Standard FOV, adjust as needed
+        // make this camera go to display 2
+        fpCamera.targetDisplay = 1;
 
         timer = captureInterval; // Initialize the timer
     }

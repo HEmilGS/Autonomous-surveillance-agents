@@ -84,6 +84,7 @@ class DroneAgent():
         self.messages = []
         self.mode = DroneMode.AUTONOMOUS
         self.status = DroneState.IDLE
+        self.drone_camera = None
         self.guard: 'GuardAgent' | None = None
         self.oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.thread_pool = ThreadPoolExecutor(max_workers=10)  # Increased to 10 workers for more parallelism
@@ -187,6 +188,7 @@ class DroneAgent():
             camera_id, x, y, z, xrot, yrot, zrot, b64img = event.split(",")
             self.camera_locations[camera_id] = (x, y, z, xrot, yrot, zrot)
             self.images[camera_id] = b64img
+            self.drone_camera = camera_id
             
   
         
@@ -240,6 +242,7 @@ class DroneAgent():
                 self.analisis_scores[camera_id] = 0.0
 
     def analyze_picture(self, b64img: str) -> float:
+        start_time = time.time()
         print("[DEBUG] DroneAgent.analyze_picture() - Analyzing picture")
 
         response = self.oai.chat.completions.create(
@@ -265,6 +268,7 @@ class DroneAgent():
         )
 
         print("[DEBUG] DroneAgent.analyze_picture() - Result:", response.choices[0].message.content)
+        print("[DEBUG] DroneAgent.analyze_picture() - Time taken:", time.time() - start_time)
         
         return float(response.choices[0].message.content)
 
@@ -327,13 +331,13 @@ class GuardAgent():
                 print("[DEBUG] GuardAgent.step() - Analyzing images")
                 self.drone.handle_camera_events()
                 self.drone.analyze_images()
-                
-                for camera_id, score in self.drone.analisis_scores.items():
-                    if score > 0.8:
-                        print("[DEBUG] GuardAgent.step() - Suspicious activity detected in camera", camera_id)
-                        # alarm should be triggered
-                        self.trigger_alarm()
-                        break
+
+                score = self.drone.analisis_scores[self.drone.drone_camera]
+                # only check drone camera to confirm
+                if score > 0.5:
+                    print("[DEBUG] GuardAgent.step() - Suspicious activity detected in drone camera")
+                    # alarm should be triggered
+                    self.trigger_alarm()
 
                 print("[DEBUG] GuardAgent.step() - Sending control ended message")
                 # let the drone know we're done
@@ -395,5 +399,5 @@ class Simulation():
 
 
 if __name__ == "__main__":
-    simulation = Simulation(30, 5)
+    simulation = Simulation(60, 5)
     simulation.run()
