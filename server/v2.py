@@ -368,6 +368,7 @@ class Simulation():
     
     def run(self):
         print("[DEBUG] Starting simulation")
+        
         while self.current_iterations < self.iterations:
             self.current_iterations += 1
             print(f"[DEBUG] Simulation iteration {self.current_iterations}")

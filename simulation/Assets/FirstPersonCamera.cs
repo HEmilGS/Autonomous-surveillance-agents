@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 public class CameraManager : MonoBehaviour
 {
@@ -78,7 +80,7 @@ public class RobotCameraController : MonoBehaviour
 
         if (timer <= 0f)
         {
-            CaptureImage();
+            Task.Run(() => CaptureImage());
             timer = captureInterval; // Reset timer
         }
     }
