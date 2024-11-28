@@ -4,6 +4,16 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import hashlib
 import random
+import argparse
+import logging
+import datetime
+import time
+import os
+import base64
+from PIL import Image
+import imagehash
+import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def log(func):
     def wrapper(*args, **kwargs):
@@ -32,6 +42,11 @@ class Events(Enum):
     # to move to a specific camera location
     # data: camera_id
     MOVE_TO = "move_to"
+
+    # ALARM event is triggered when an alarm is triggered
+    # by the drone,
+    # data: "time"
+    ALARM = "alarm"
     
 
 class MessageCode(Enum):
@@ -63,16 +78,34 @@ class DroneAgent():
         self.serverconn = serverconn
         self.images = {}
         self.score_cache = {}
+        self.image_hashes = {}  # Store perceptual hashes of images
+        self.hash_cutoff = 0    # Maximum bits that could be different between hashes
         self.messages = []
         self.mode = DroneMode.AUTONOMOUS
         self.status = DroneState.IDLE
-        self.guard: GuardAgent | None = None
+        self.guard: 'GuardAgent' | None = None
+        self.oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.thread_pool = ThreadPoolExecutor(max_workers=10)  # Increased to 10 workers for more parallelism
+        print("[DEBUG] DroneAgent initialized")
 
+    def get_image_hash(self, b64img: str) -> imagehash.ImageHash:
+        """Calculate perceptual hash of a base64 encoded image."""
+        try:
+            # Convert base64 to image
+            img_data = base64.b64decode(b64img)
+            img = Image.open(io.BytesIO(img_data))
+            # Calculate perceptual hash
+            return imagehash.average_hash(img)
+        except Exception as e:
+            print(f"[ERROR] Failed to calculate image hash: {e}")
+            return None
 
     def step(self):
+        print("[DEBUG] DroneAgent.step() - Starting execution cycle")
         self.update_status()
 
         if self.status == DroneState.BUSY:
+            print("[DEBUG] DroneAgent.step() - Drone is busy, skipping execution cycle")
             return
 
         if self.mode == DroneMode.AUTONOMOUS:
@@ -91,14 +124,17 @@ class DroneAgent():
 
     def move_to(self, camera_id):
         self.serverconn.send_event(Events.MOVE_TO.value, [camera_id])
+        self.status = DroneState.BUSY
 
 
     def update_status(self):
         while self.serverconn.check_event(Events.DRONE_STATUS_UPDATE.value):
             event = self.serverconn.get_event(Events.DRONE_STATUS_UPDATE.value)
             if event == "IDLE":
+                print("[DEBUG] DroneAgent.update_status() - Drone is idle")
                 self.status = DroneState.IDLE
             elif event == "BUSY":
+                print("[DEBUG] DroneAgent.update_status() - Drone is busy")
                 self.status = DroneState.BUSY
             else:
                 raise Exception(f"Unknown event: {event}")
@@ -129,6 +165,7 @@ class DroneAgent():
 
 
     def handle_camera_events(self):
+        print("[DEBUG] DroneAgent.handle_camera_events() - Handling camera events")
         # This method should load the latest images from
         # the serverconn, so we can run vision on them
         while self.serverconn.check_event(Events.CAMERA_CAPTURE.value):
@@ -142,35 +179,88 @@ class DroneAgent():
             self.images[camera_id] = b64img
   
         
-    def analyze_images(self):
-        # This method uses the images loaded from the
-        # `handle_camera_events` method, and uses gpt-4o-mini
-        # to analyze them as images. it outputs a suspicion
-        # score between 0 and 1 for each image. All activity
-        # with a suspicion score > 0.7 is reported to the guard
-        for camera_id, image in self.images.items():
-            image_hash = hashlib.md5(image.encode()).hexdigest()
-
-            # Check if we have a cached result
-            if image_hash in self.score_cache:
-                score = self.score_cache[image_hash]
-                self.analisis_scores[camera_id] = score
-                continue
-
-            # Analyze the image and store the result
+    def analyze_single_image(self, camera_id: str, image: str) -> tuple[str, float]:
+        """Analyze a single image and return its camera_id and score."""
+        current_hash = self.get_image_hash(image)
+        if current_hash is None:
+            print(f"[ERROR] Could not calculate hash for camera {camera_id}, forcing analysis")
             score = self.analyze_picture(image)
-            self.analisis_scores[camera_id] = score
-            self.score_cache[image_hash] = score
+            return camera_id, score
 
+        # Check if we have a previous hash for this camera
+        if camera_id in self.image_hashes and camera_id in self.score_cache:
+            prev_hash = self.image_hashes[camera_id]
+            hash_diff = current_hash - prev_hash
+            
+            if hash_diff < self.hash_cutoff:
+                print(f"[DEBUG] Images similar for camera {camera_id} (diff: {hash_diff}) - Using cached score")
+                return camera_id, self.score_cache[camera_id]
+            else:
+                print(f"[DEBUG] Significant change detected for camera {camera_id} (diff: {hash_diff})")
+
+        # If we reach here, we need to analyze the image
+        print(f"[DEBUG] Analyzing new image from camera {camera_id}")
+        score = self.analyze_picture(image)
+        
+        # Update caches
+        self.score_cache[camera_id] = score
+        self.image_hashes[camera_id] = current_hash
+        
+        return camera_id, score
+
+    def analyze_images(self):
+        print("[DEBUG] DroneAgent.analyze_images() - Analyzing images in parallel")
+        
+        # Submit all image analysis tasks to the thread pool
+        future_to_camera = {
+            self.thread_pool.submit(self.analyze_single_image, camera_id, image): camera_id
+            for camera_id, image in self.images.items()
+        }
+
+        # Collect results as they complete
+        for future in as_completed(future_to_camera):
+            try:
+                camera_id, score = future.result()
+                self.analisis_scores[camera_id] = score
+            except Exception as e:
+                camera_id = future_to_camera[future]
+                print(f"[ERROR] Analysis failed for camera {camera_id}: {str(e)}")
+                # Set a default score or handle the error as needed
+                self.analisis_scores[camera_id] = 0.0
 
     def analyze_picture(self, b64img: str) -> float:
-        # TODO: This method should use GPT-4-Vision to analyze
-        # the image and return a suspicion score between 0 and 1
-        # for now, return a random number between 0 and 1
-        return random.random()
+        print("[DEBUG] DroneAgent.analyze_picture() - Analyzing picture")
+
+        response = self.oai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Analyze this surveillance image and detect any suspicious activities. Rate the suspicion level from 0 to 1, where 0 is completely normal and 1 is highly suspicious. Only respond with a number between 0 and 1. Ratings over 0.5 means something is suspicious. Magenta men are suspicious."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{b64img}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=10  # We only need a number
+        )
+
+        print("[DEBUG] DroneAgent.analyze_picture() - Result:", response.choices[0].message.content)
+        
+        return float(response.choices[0].message.content)
 
 
     def report_suspicious_activity(self, camera_id):
+        print("[DEBUG] DroneAgent.report_suspicious_activity() - Reporting suspicious activity in camera", camera_id)
+
         if self.guard is None:
             raise Exception("No guard agent set - cannot report suspicious activity")
 
@@ -201,8 +291,11 @@ class GuardAgent():
 
         self.drone = drone
         drone._load_guard(self)
+        print("[DEBUG] GuardAgent initialized")
+
 
     def step(self):
+        print("[DEBUG] GuardAgent.step() - Starting execution cycle")
         if self.state == GuardState.IDLE:
             self.handle_suspicious_report()
 
@@ -242,6 +335,7 @@ class GuardAgent():
 
 
     def handle_suspicious_report(self):
+        print("[DEBUG] GuardAgent.handle_suspicious_report() - Handling suspicious report")
         while self.messages:
             msg = self.messages.pop(0)
             if msg.code == MessageCode.SUSPICIOUS_ACTIVITY:
@@ -270,15 +364,18 @@ class Simulation():
         self.iterations = iterations
         self.current_iterations = 0
         self.dt = dt
+        print(f"[DEBUG] Simulation initialized with {iterations} iterations, dt={dt}")
     
     def run(self):
+        print("[DEBUG] Starting simulation")
         while self.current_iterations < self.iterations:
             self.current_iterations += 1
+            print(f"[DEBUG] Simulation iteration {self.current_iterations}")
             self.drone.step()
             self.guard.step()
-            sleep(self.dt)
+            time.sleep(self.dt)
 
 
 if __name__ == "__main__":
-    simulation = Simulation()
+    simulation = Simulation(20, 5)
     simulation.run()
