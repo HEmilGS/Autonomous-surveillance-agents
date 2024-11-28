@@ -123,7 +123,7 @@ class EventEmitter():
                         
                         self.event_queues[event_type].put(event_data)
                     except json.JSONDecodeError:
-                        print(f"Invalid JSON received: {message}")
+                        print(f"Invalid JSON received")
             except Exception as e:
                 if self.running:
                     print(f"Error handling events: {e}")

@@ -1,61 +1,61 @@
-using UnityEngine.Splines;
 using UnityEngine;
-using System.Collections;
+using UnityEngine.Splines;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Splines;
 
 public class DroneManager : MonoBehaviour
 {
     public GameObject dronePrefab;
     public SplineContainer spline;
-    float distancePercentage = 0f;
-    float splineLenght;
-    public float speed = 1f;
+    private float speed = 10f;
+    private float pauseDuration = 8f; // Time to pause at the destination
+    private float returnToSplineSpeed = 10f;
 
-    class Movement {
+    private float distancePercentage = 0f;
+    private float splineLength;
+
+    private enum DroneState { FollowingSpline, MovingToDestination, Pausing, ReturningToSpline }
+    private DroneState currentState = DroneState.FollowingSpline;
+
+    private Movement currentMovement;
+    private float pauseTimer = 0f;
+
+    class Movement
+    {
         public Vector3 destination;
+        public Quaternion rotation;
         public string type;
     }
 
-    private Movement[] movements = new Movement[0];
+    private List<Movement> movements = new List<Movement>();
 
-    private void Start(){
-        // first we make the drone take off from its landing zone
-
-        // dronePrefab.transform.position = spline.GetPoint(0); // set the drone to the starting point of the spline path
-
-        splineLenght = spline.CalculateLength();
+    private void Start()
+    {
+        splineLength = spline.CalculateLength();
 
         SocketClient connection = SocketClient.Instance;
-        
-        connection.HandleEvent("move_to", (string[] data) => {
-            // move the drone to the GameObject camera with the name data[0]
-            // SocketClient.Instance.SendEvent("drone_status_update", new string[] { "BUSY" });
+        connection.HandleEvent("move_to", (string[] data) =>
+        {
+            float x = float.Parse(data[0]);
+            float y = float.Parse(data[1]);
+            float z = float.Parse(data[2]);
 
-            string cameraId = data[0];
+            float xrot = float.Parse(data[3]);
+            float yrot = float.Parse(data[4]);
+            float zrot = float.Parse(data[5]);
 
-            foreach (var prefabInstance in GameObject.FindObjectsOfType<GameObject>()) {
-                if (prefabInstance.name == cameraId) {
-                    Vector3 destination = prefabInstance.transform.position;
-                    // GameObject camera = GameObject.Find(data[0]);
-                    // Vector3 destination = camera.transform.position;
-                    Movement movement = new() {
-                        destination = destination,
-                        type = "move_to"
-                    };
-                }
-            }
+            Vector3 destination = new Vector3(x, y, z);
+            Quaternion rotation = Quaternion.Euler(xrot, yrot + 90, zrot);
 
+            movements.Add(new Movement { destination = destination, rotation = rotation, type = "move_to" });
         });
     }
 
-    private void MoveDroneSpline(){
-
-        distancePercentage += speed * Time.deltaTime / splineLenght;
+    private void MoveDroneSpline()
+    {
+        distancePercentage += speed * Time.deltaTime / splineLength;
 
         Vector3 currentPosition = spline.EvaluatePosition(distancePercentage);
-        transform.position = currentPosition;
+        dronePrefab.transform.position = currentPosition;
 
         if (distancePercentage > 1f)
         {
@@ -64,42 +64,86 @@ public class DroneManager : MonoBehaviour
 
         Vector3 nextPosition = spline.EvaluatePosition(distancePercentage + 0.05f);
         Vector3 direction = nextPosition - currentPosition;
-        transform.rotation = Quaternion.LookRotation(direction, transform.up);
-
+        dronePrefab.transform.rotation = Quaternion.LookRotation(direction, dronePrefab.transform.up);
     }
 
-    private void MoveDrone(){
-        // switch between the two movement types, if the drone receives a move_to command, 
-        // it will move to the destination, while it does not receive any command, 
-        // it will follow the spline, if the drone arrives at the destination, it will 
-        // remove the movement from the list and set the drone to idle state and 
+    private void MoveToDestination()
+    {
+        if (dronePrefab.transform.position == currentMovement.destination)
+        {
+            // make sure the drone's rotation is correct
+            dronePrefab.transform.rotation = currentMovement.rotation;
 
-        foreach (Movement movement in movements) {
-            Animator animator = dronePrefab.GetComponent<Animator>();
-
-            if (movement.type == "move_to") {
-                if (dronePrefab.transform.position == movement.destination) {
-                    List<Movement> newMovements = new List<Movement>();
-                    foreach (Movement m in movements) {
-                        if (m != movement) {
-                            newMovements.Add(m);
-                        }
-                    }
-                    movements = newMovements.ToArray();
-                    SocketClient.Instance.SendEvent("drone_status_update", new string[] { "IDLE" });
-                } else {
-                    dronePrefab.transform.position = Vector3.MoveTowards(dronePrefab.transform.position, movement.destination, Time.deltaTime * 2f);
-                }
-            }
+            SocketClient.Instance.SendEvent("drone_status_update", new string[] { "IDLE" });
+            currentState = DroneState.Pausing;
+            pauseTimer = pauseDuration;
+        }
+        else
+        {
+            dronePrefab.transform.position = Vector3.MoveTowards(
+                dronePrefab.transform.position,
+                currentMovement.destination,
+                Time.deltaTime * speed
+            );
         }
     }
 
-    void Update() {
-        // switch between the two movement types, if the drone receives a move_to command, it will move to the destination, while it does not receive any command, it will follow the spline
-        if (movements.Length > 0) {
-            MoveDrone();
-        } else {
-            MoveDroneSpline();
+    private void PauseAtDestination()
+    {
+        pauseTimer -= Time.deltaTime;
+        if (pauseTimer <= 0f)
+        {
+            currentState = DroneState.ReturningToSpline;
+            SocketClient.Instance.SendEvent("drone_status_update", new string[] { "BUSY" });
+        }
+    }
+
+    private void ReturnToSpline()
+    {
+        Vector3 closestPointOnSpline = spline.EvaluatePosition(distancePercentage);
+        if (Vector3.Distance(dronePrefab.transform.position, closestPointOnSpline) < 0.1f)
+        {
+            currentState = DroneState.FollowingSpline;
+            SocketClient.Instance.SendEvent("drone_status_update", new string[] { "IDLE" });
+            movements.RemoveAt(0);
+        }
+        else
+        {
+            dronePrefab.transform.position = Vector3.MoveTowards(
+                dronePrefab.transform.position,
+                closestPointOnSpline,
+                Time.deltaTime * returnToSplineSpeed
+            );
+        }
+    }
+
+    private void Update()
+    {
+        switch (currentState)
+        {
+            case DroneState.FollowingSpline:
+                if (movements.Count > 0)
+                {
+                    currentMovement = movements[0];
+                    currentState = DroneState.MovingToDestination;
+                }
+                else
+                {
+                    MoveDroneSpline();
+                }
+                break;
+
+            case DroneState.MovingToDestination:
+                MoveToDestination();
+                break;
+
+            case DroneState.Pausing:
+                PauseAtDestination();
+                break;
+
+            case DroneState.ReturningToSpline:
+                ReturnToSpline();
+                break;
         }
     }
 }

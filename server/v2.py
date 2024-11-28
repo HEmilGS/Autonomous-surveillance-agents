@@ -77,6 +77,7 @@ class DroneAgent():
         self.analisis_scores = {}
         self.serverconn = serverconn
         self.images = {}
+        self.camera_locations = {}
         self.score_cache = {}
         self.image_hashes = {}  # Store perceptual hashes of images
         self.hash_cutoff = 0    # Maximum bits that could be different between hashes
@@ -112,9 +113,13 @@ class DroneAgent():
             self.handle_camera_events()
             self.analyze_images()
 
+            riskiest_camera = None
             for camera_id, score in self.analisis_scores.items():
-                if score > 0.7:
-                    self.report_suspicious_activity(camera_id)
+                if riskiest_camera is None or score > self.analisis_scores[riskiest_camera]:
+                    riskiest_camera = camera_id
+
+            if riskiest_camera is not None and riskiest_camera in self.analisis_scores and self.analisis_scores[riskiest_camera] >= 0.5:
+                self.report_suspicious_activity(riskiest_camera)
 
             self.handle_connection_request()
 
@@ -123,7 +128,8 @@ class DroneAgent():
 
 
     def move_to(self, camera_id):
-        self.serverconn.send_event(Events.MOVE_TO.value, [camera_id])
+        x, y, z, xrot, yrot, zrot = self.camera_locations[camera_id]
+        self.serverconn.send_event(Events.MOVE_TO.value, [x, y, z, xrot, yrot, zrot, camera_id])
         self.status = DroneState.BUSY
 
 
@@ -131,10 +137,10 @@ class DroneAgent():
         while self.serverconn.check_event(Events.DRONE_STATUS_UPDATE.value):
             event = self.serverconn.get_event(Events.DRONE_STATUS_UPDATE.value)
             if event == "IDLE":
-                print("[DEBUG] DroneAgent.update_status() - Drone is idle")
+                print("[DEBUG] DroneAgent.update_status() - Changing status to IDLE")
                 self.status = DroneState.IDLE
             elif event == "BUSY":
-                print("[DEBUG] DroneAgent.update_status() - Drone is busy")
+                print("[DEBUG] DroneAgent.update_status() - Changing status to BUSY")
                 self.status = DroneState.BUSY
             else:
                 raise Exception(f"Unknown event: {event}")
@@ -149,6 +155,7 @@ class DroneAgent():
         while self.messages:
             msg = self.messages.pop(0)
             if msg.code == MessageCode.CONTROL_REQUEST:
+                print("[DEBUG] DroneAgent.handle_connection_request() - Control request received - switching to CONTROLLED mode")
                 self.mode = DroneMode.CONTROLLED
             else:
                 print("[WARN]: Unknown message code:", msg.code)
@@ -159,6 +166,7 @@ class DroneAgent():
         while self.messages:
             msg = self.messages.pop(0)
             if msg.code == MessageCode.CONTROL_ENDED:
+                print("[DEBUG] DroneAgent.handle_connection_close() - Control ended received - switching to AUTONOMOUS mode")
                 self.mode = DroneMode.AUTONOMOUS
             else:
                 print("[WARN]: Unknown message code:", msg.code)
@@ -170,13 +178,16 @@ class DroneAgent():
         # the serverconn, so we can run vision on them
         while self.serverconn.check_event(Events.CAMERA_CAPTURE.value):
             event = self.serverconn.get_event(Events.CAMERA_CAPTURE.value)
-            camera_id, b64img = event.split(",")
+            camera_id, x, y, z, xrot, yrot, zrot, b64img = event.split(",")
+            self.camera_locations[camera_id] = (x, y, z, xrot, yrot, zrot)
             self.images[camera_id] = b64img
 
         while self.serverconn.check_event(Events.DRONE_CAMERA_CAPTURE.value):
             event = self.serverconn.get_event(Events.DRONE_CAMERA_CAPTURE.value)
-            camera_id, b64img = event.split(",")
+            camera_id, x, y, z, xrot, yrot, zrot, b64img = event.split(",")
+            self.camera_locations[camera_id] = (x, y, z, xrot, yrot, zrot)
             self.images[camera_id] = b64img
+            
   
         
     def analyze_single_image(self, camera_id: str, image: str) -> tuple[str, float]:
@@ -302,24 +313,29 @@ class GuardAgent():
         if self.state == GuardState.INVESTIGATING:
             # move the drone to the suspicious camera
             if self.drone.status == DroneState.IDLE and not self.moved_drone:
+                print("[DEBUG] GuardAgent.step() - Moving drone to suspicious camera")
                 # call this once to start moving
                 self.moved_drone = True
                 self.drone.move_to(self.suspicious_camera)
 
             if self.drone.status == DroneState.IDLE and self.moved_drone:
+                print("[DEBUG] GuardAgent.step() - Drone moved to suspicious camera")
                 self.moved_drone = False # reset
 
                 # this means the drone has moved to the expected location
-                # so we can look at the images and make a decision
+                # so we can look at the images and make a decision\
+                print("[DEBUG] GuardAgent.step() - Analyzing images")
                 self.drone.handle_camera_events()
                 self.drone.analyze_images()
                 
                 for camera_id, score in self.drone.analisis_scores.items():
                     if score > 0.8:
+                        print("[DEBUG] GuardAgent.step() - Suspicious activity detected in camera", camera_id)
                         # alarm should be triggered
                         self.trigger_alarm()
                         break
 
+                print("[DEBUG] GuardAgent.step() - Sending control ended message")
                 # let the drone know we're done
                 msg = Message(
                     code=MessageCode.CONTROL_ENDED,
@@ -327,6 +343,7 @@ class GuardAgent():
                     sender=self
                 )             
 
+                print("[DEBUG] GuardAgent.step() - Changing state to IDLE")
                 self.drone.message_box_append(msg)
                 self.state = GuardState.IDLE   
     
@@ -335,10 +352,10 @@ class GuardAgent():
 
 
     def handle_suspicious_report(self):
-        print("[DEBUG] GuardAgent.handle_suspicious_report() - Handling suspicious report")
         while self.messages:
             msg = self.messages.pop(0)
             if msg.code == MessageCode.SUSPICIOUS_ACTIVITY:
+                print("[DEBUG] GuardAgent.handle_suspicious_report() - Handling suspicious report")
                 self.state = GuardState.INVESTIGATING
                 self.suspicious_camera = msg.message
                 # request control of the drone
@@ -378,5 +395,5 @@ class Simulation():
 
 
 if __name__ == "__main__":
-    simulation = Simulation(20, 5)
+    simulation = Simulation(30, 5)
     simulation.run()

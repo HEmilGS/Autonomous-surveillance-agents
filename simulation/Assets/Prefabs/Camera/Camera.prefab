@@ -142,6 +142,10 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 716453618961475120, guid: ebae4fd536d4140bc979d983ec21ddfa, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: ebae4fd536d4140bc979d983ec21ddfa, type: 3}
       propertyPath: m_Name
       value: AlarmLight

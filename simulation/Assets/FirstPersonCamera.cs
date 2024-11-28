@@ -2,15 +2,13 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 public class CameraManager : MonoBehaviour
 {
     public GameObject prefabToMonitor; // Assign your animated prefab asset here
     public float captureInterval = 5f; // Time interval in seconds between captures
-    public int imageWidth = 800; // Resolution width of the captured image
-    public int imageHeight = 600; // Resolution height of the captured image
+    private int imageWidth = 800; // Resolution width of the captured image
+    private int imageHeight = 600; // Resolution height of the captured image
 
     private List<RobotCameraController> robotControllers = new List<RobotCameraController>(); // Track prefab instances with cameras
 
@@ -80,7 +78,7 @@ public class RobotCameraController : MonoBehaviour
 
         if (timer <= 0f)
         {
-            Task.Run(() => CaptureImage());
+            CaptureImage();
             timer = captureInterval; // Reset timer
         }
     }
@@ -88,7 +86,8 @@ public class RobotCameraController : MonoBehaviour
     private void CaptureImage()
     {
         // Create a RenderTexture for capturing the image
-        Camera camera = GameObject.Find(cameraName).GetComponent<Camera>();
+        GameObject cameraObject = GameObject.Find(cameraName);
+        Camera camera = cameraObject.GetComponent<Camera>();
         RenderTexture renderTexture = new RenderTexture(imageWidth, imageHeight, 24);
         camera.targetTexture = renderTexture;
 
@@ -113,8 +112,22 @@ public class RobotCameraController : MonoBehaviour
         // Convert bytes to base64 string
         string base64Image = Convert.ToBase64String(imageBytes);
         
+        float x = gameObject.transform.position.x;
+        float y = gameObject.transform.position.y;
+        float z = gameObject.transform.position.z;
+
+        string x_string = x.ToString();
+        string y_string = y.ToString();
+        string z_string = z.ToString(); 
+
+        // also send the rotation of the camera
+        Vector3 cameraRotation = cameraObject.transform.rotation.eulerAngles;
+        string xrot_string = cameraRotation.x.ToString();
+        string yrot_string = cameraRotation.y.ToString();
+        string zrot_string = cameraRotation.z.ToString();
+
         // Send through socket connection
-        SocketClient.Instance.SendEvent("camera_capture", new string[] { cameraName, base64Image });
+        SocketClient.Instance.SendEvent("camera_capture", new string[] { cameraName, x_string, y_string, z_string, xrot_string, yrot_string, zrot_string, base64Image });
 
         // Debug.Log($"Image captured and sent for {gameObject.name}");
     }

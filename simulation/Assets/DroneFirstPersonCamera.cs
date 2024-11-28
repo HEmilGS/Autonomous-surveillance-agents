@@ -7,8 +7,8 @@ public class DroneCameraManager : MonoBehaviour
 {
     public GameObject prefabToMonitor; // Assign your animated prefab asset here
     public float captureInterval = 5f; // Time interval in seconds between captures
-    public int imageWidth = 800; // Resolution width of the captured image
-    public int imageHeight = 600; // Resolution height of the captured image
+    private int imageWidth = 800; // Resolution width of the captured image
+    private int imageHeight = 600; // Resolution height of the captured image
 
     private List<DroneCameraController> robotControllers = new List<DroneCameraController>(); // Track prefab instances with cameras
 
@@ -88,7 +88,8 @@ public class DroneCameraController : MonoBehaviour
     private void CaptureImage()
     {
         // Create a RenderTexture for capturing the image
-        Camera camera = GameObject.Find(cameraName).GetComponent<Camera>();
+        GameObject cameraObject = GameObject.Find(cameraName);
+        Camera camera = cameraObject.GetComponent<Camera>();
         RenderTexture renderTexture = new RenderTexture(imageWidth, imageHeight, 24);
         camera.targetTexture = renderTexture;
 
@@ -112,10 +113,24 @@ public class DroneCameraController : MonoBehaviour
 
         // Convert bytes to base64 string
         string base64Image = Convert.ToBase64String(imageBytes);
+
+        float x = gameObject.transform.position.x;
+        float y = gameObject.transform.position.y;
+        float z = gameObject.transform.position.z;
+
+        string x_string = x.ToString();
+        string y_string = y.ToString();
+        string z_string = z.ToString();
+
+        // also send the rotation of the camera
+        Vector3 cameraRotation = cameraObject.transform.rotation.eulerAngles;
+        string xrot_string = cameraRotation.x.ToString();
+        string yrot_string = cameraRotation.y.ToString();
+        string zrot_string = cameraRotation.z.ToString();
         
         // Send through socket connection
         string robotId = gameObject.name;
-        SocketClient.Instance.SendEvent("drone_camera_capture", new string[] { robotId, base64Image });
+        SocketClient.Instance.SendEvent("drone_camera_capture", new string[] { robotId, x_string, y_string, z_string, xrot_string, yrot_string, zrot_string, base64Image });
 
         // Debug.Log($"Image captured and sent for {gameObject.name}");
     }
