@@ -112,8 +112,7 @@ public class RobotCameraController : MonoBehaviour
         string base64Image = Convert.ToBase64String(imageBytes);
         
         // Send through socket connection
-        string robotId = gameObject.name;
-        SocketClient.Instance.SendEvent("camera_capture", new string[] { robotId, base64Image });
+        SocketClient.Instance.SendEvent("camera_capture", new string[] { cameraName, base64Image });
 
         // Debug.Log($"Image captured and sent for {gameObject.name}");
     }

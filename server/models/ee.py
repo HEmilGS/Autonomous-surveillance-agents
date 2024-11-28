@@ -27,12 +27,17 @@ class MockEmitter():
         
         return not self.event_queues[type].empty()
 
-    def send_event(self, type: str, data: Any):
+    def send_event(self, type: str, data: list[str]):
+        """
+        Send an event through the queue system.
+        Args:
+            type: Event type identifier
+            data: List of strings to be joined with commas
+        """
         if type not in self.event_queues:
             self.register_event_type(type)
             
-        str_data = [str(d) for d in data]
-        self.event_queues[type].put(",".join(str_data))
+        self.event_queues[type].put(",".join(data))
 
     def close(self):
         pass
@@ -75,14 +80,16 @@ class EventEmitter():
         
         return not self.event_queues[type].empty()
 
-    def send_event(self, type: str, data: Any):
-        # send an event through current TCP connection with the following shape
-        # {"type": type, "data": {...}}
-        str_data = [str(d) for d in data]
-
+    def send_event(self, type: str, data: list[str]):
+        """
+        Send an event through current TCP connection.
+        Args:
+            type: Event type identifier
+            data: List of strings to be joined with commas
+        """
         event = {
             "type": type,
-            "data": ",".join(str_data)
+            "data": ",".join(data)
         }
 
         message = json.dumps(event) + "\n"
