@@ -3,7 +3,7 @@ using UnityEngine;
 public class CameraFollower : MonoBehaviour
 {
     public Transform target; // The target object (robot) to follow
-    public float heightOffset = 1.0f; // Vertical offset for the camera
+    public float heightOffset = 0.5f; // Vertical offset for the camera
 
     private void LateUpdate()
     {
@@ -13,7 +13,7 @@ public class CameraFollower : MonoBehaviour
             transform.position = target.position + Vector3.up * heightOffset;
 
             // Match the target's rotation with a 180-degree offset around the Y-axis
-            transform.rotation = target.rotation * Quaternion.Euler(0, -90, 0);
+            transform.rotation = target.rotation * Quaternion.Euler(25, -90, 0);
         }
     }
 }
