@@ -331,7 +331,7 @@ class GuardAgent():
                 self.state = GuardState.IDLE   
     
     def trigger_alarm(self):
-        self.serverconn.send_event(Events.ALARM.value, ["30"])
+        self.serverconn.send_event(Events.ALARM.value, ["17"])
 
 
     def handle_suspicious_report(self):
