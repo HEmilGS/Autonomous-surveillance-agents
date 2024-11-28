@@ -30,7 +30,17 @@ public class DroneManager : MonoBehaviour
 
     private void Start()
     {
-        splineLength = spline.CalculateLength();
+        Animator animator = dronePrefab.GetComponent<Animator>(); // Get the animator component
+
+        animator.SetBool("isSleeping", false); // Set the isSleeping parameter to false to make the drone take off from the drone port
+        animator.SetBool("isFlying", true); // Set the isFlying parameter to true to make the drone fly
+
+        // Save the initial position and rotation of the drone itself
+        Vector3 basePosition = dronePrefab.transform.position;
+        Quaternion baseRotation = dronePrefab.transform.rotation;
+
+        // Add to the movements list to take off the drone from the drone port, and move it to the first point of the spline path
+        movements.Add(new Movement { destination = spline.EvaluatePosition(0f), rotation = Quaternion.identity, type = "move_to" });
 
         SocketClient connection = SocketClient.Instance;
         connection.HandleEvent("move_to", (string[] data) =>
@@ -47,6 +57,11 @@ public class DroneManager : MonoBehaviour
             Quaternion rotation = Quaternion.Euler(xrot, yrot + 90, zrot);
 
             movements.Add(new Movement { destination = destination, rotation = rotation, type = "move_to" });
+        });
+
+        connection.HandleEvent("return_to_base", (string[] data) =>
+        {
+            movements.Add(new Movement { destination = basePosition, rotation = baseRotation, type = "return_to_base" });
         });
     }
 
@@ -77,6 +92,11 @@ public class DroneManager : MonoBehaviour
             SocketClient.Instance.SendEvent("drone_status_update", new string[] { "IDLE" });
             currentState = DroneState.Pausing;
             pauseTimer = pauseDuration;
+        }else if (Vector3.Distance(dronePrefab.transform.position, currentMovement.destination) < 0.2f && currentMovement.type == "return_to_base") 
+        {
+            SocketClient.Instance.SendEvent("drone_status_update", new string[] { "BUSY" });
+            animator.SetBool("isFlying", false); // Set the isSleeping parameter to true to make the drone land on the drone port
+            animator.SetBool("isSleeping", true); // Set the isSleeping parameter to true to make the drone land on the drone port
         }
         else
         {
@@ -119,6 +139,8 @@ public class DroneManager : MonoBehaviour
 
     private void Update()
     {
+        Animator animator = dronePrefab.GetComponent<Animator>();
+        
         switch (currentState)
         {
             case DroneState.FollowingSpline:
@@ -129,19 +151,23 @@ public class DroneManager : MonoBehaviour
                 }
                 else
                 {
+                    animator.SetBool("isMoving", true); 
                     MoveDroneSpline();
                 }
                 break;
 
             case DroneState.MovingToDestination:
+                animator.SetBool("isMoving", true);
                 MoveToDestination();
                 break;
 
             case DroneState.Pausing:
+                animator.SetBool("isMoving", false);
                 PauseAtDestination();
                 break;
 
             case DroneState.ReturningToSpline:
+                animator.SetBool("isMoving", true);
                 ReturnToSpline();
                 break;
         }
