@@ -318,7 +318,7 @@ MonoBehaviour:
       scrollPos: {x: 0, y: 0}
       m_SelectedIDs: 
       m_LastClickedID: 0
-      m_ExpandedIDs: 52deffff0efbffff22790000ea7f0000
+      m_ExpandedIDs: ee83fffff283ffff7ca2ffff00dfffff0efbffff3e790000287c0000
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -922,9 +922,9 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: 335.2178, y: 14.259513, z: 242.77951}
+    m_Target: {x: 335.1747, y: 12.581013, z: 443.79352}
     speed: 2
-    m_Value: {x: 335.2178, y: 14.259513, z: 242.77951}
+    m_Value: {x: 335.1747, y: 12.581013, z: 443.79352}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -970,13 +970,13 @@ MonoBehaviour:
     m_GridAxis: 1
     m_gridOpacity: 0.5
   m_Rotation:
-    m_Target: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
+    m_Target: {x: 0.053589556, y: -0.118941225, z: 0.0064291786, w: 0.9914343}
     speed: 2
-    m_Value: {x: -0, y: 0.7071068, z: -0, w: -0.7071068}
+    m_Value: {x: -0.05358956, y: 0.11894123, z: -0.0064291786, w: -0.99143434}
   m_Size:
-    m_Target: 5.1353164
+    m_Target: 2.6129658
     speed: 2
-    m_Value: 5.1353164
+    m_Value: 2.6129658
   m_Ortho:
     m_Target: 0
     speed: 2
@@ -1228,7 +1228,7 @@ MonoBehaviour:
     m_SkipHidden: 1
     m_SearchArea: 1
     m_Folders:
-    - Assets/Prefabs/Booth
+    - Assets
     m_Globs: []
     m_ProductIds: 
     m_AnyWithAssetOrigin: 0
@@ -1238,15 +1238,15 @@ MonoBehaviour:
   m_ViewMode: 1
   m_StartGridSize: 64
   m_LastFolders:
-  - Assets/Prefabs/Booth
+  - Assets
   m_LastFoldersGridSize: -1
   m_LastProjectPath: /Users/emilgrijalva/Desktop/E/1tec/progra/agentes/unity/unity/simulation
   m_LockTracker:
     m_IsLocked: 0
   m_FolderTreeState:
     scrollPos: {x: 0, y: 0}
-    m_SelectedIDs: 74a20000
-    m_LastClickedID: 41588
+    m_SelectedIDs: ee980000
+    m_LastClickedID: 39150
     m_ExpandedIDs: 00000000ee980000
     m_RenameOverlay:
       m_UserAcceptedRename: 0

@@ -13322,11 +13322,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 81ccaba5c7ae946b3bb86a9783ee85c8, type: 3}
---- !u!1 &881691926 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5403987234876136259, guid: 81ccaba5c7ae946b3bb86a9783ee85c8, type: 3}
-  m_PrefabInstance: {fileID: 881691925}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &881691927 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4734692158080664057, guid: 81ccaba5c7ae946b3bb86a9783ee85c8, type: 3}
@@ -13507,6 +13502,11 @@ PrefabInstance:
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a50f34d11ba2c499eac1c2ef6ede1268, type: 3}
   m_PrefabInstance: {fileID: 883157783}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &908256638 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7800592603746118121, guid: 81ccaba5c7ae946b3bb86a9783ee85c8, type: 3}
+  m_PrefabInstance: {fileID: 881691925}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &911824030
 GameObject:
@@ -15558,7 +15558,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 84a71e0ba0afc434c954c53f03334276, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  prefabToMonitor: {fileID: 881691926}
+  prefabToMonitor: {fileID: 908256638}
   captureInterval: 5
   imageWidth: 1920
   imageHeight: 1080

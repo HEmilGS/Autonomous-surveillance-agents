@@ -7,8 +7,8 @@ public class CameraManager : MonoBehaviour
 {
     public GameObject prefabToMonitor; // Assign your animated prefab asset here
     public float captureInterval = 5f; // Time interval in seconds between captures
-    public int imageWidth = 1920; // Resolution width of the captured image
-    public int imageHeight = 1080; // Resolution height of the captured image
+    public int imageWidth = 800; // Resolution width of the captured image
+    public int imageHeight = 600; // Resolution height of the captured image
 
     private List<RobotCameraController> robotControllers = new List<RobotCameraController>(); // Track prefab instances with cameras
 

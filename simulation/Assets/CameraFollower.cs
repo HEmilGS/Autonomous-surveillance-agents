@@ -13,7 +13,7 @@ public class CameraFollower : MonoBehaviour
             transform.position = target.position + Vector3.up * heightOffset;
 
             // Match the target's rotation with a 180-degree offset around the Y-axis
-            transform.rotation = target.rotation * Quaternion.Euler(0, 180, 0);
+            transform.rotation = target.rotation * Quaternion.Euler(0, -90, 0);
         }
     }
 }
