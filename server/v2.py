@@ -47,7 +47,11 @@ class Events(Enum):
     # by the drone,
     # data: "time"
     ALARM = "alarm"
-    
+
+    # Events for stats tracking
+    ALARM_TRIGGERED = "alarm_triggered"
+    SUSPICIOUS_ACTIVITY_STARTED = "suspicious_activity_started"
+
 
 class MessageCode(Enum):
     SUSPICIOUS_ACTIVITY = "SUSPICIOUS_ACTIVITY"
@@ -353,6 +357,7 @@ class GuardAgent():
     
     def trigger_alarm(self):
         self.serverconn.send_event(Events.ALARM.value, ["17"])
+        self.serverconn.send_event(Events.ALARM_TRIGGERED.value, [datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
 
 
     def handle_suspicious_report(self):
@@ -369,6 +374,7 @@ class GuardAgent():
                     sender=self
                 )
                 self.drone.message_box_append(msg)
+                self.serverconn.send_event(Events.SUSPICIOUS_ACTIVITY_STARTED.value, [datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), msg.message])
             else:
                 print("[WARN]: Unknown message code:", msg.code)
 
@@ -377,11 +383,116 @@ class GuardAgent():
         self.messages.append(message)
 
 
+class Stats:
+    def __init__(self, serverconn):
+        self.serverconn = serverconn
+        self.alarm_events = []
+        self.suspicious_activities = []
+        print("[DEBUG] Stats tracking initialized")
+    
+    def update_stats(self):
+        # Check for alarm events
+        while self.serverconn.check_event(Events.ALARM_TRIGGERED.value):
+            data = self.serverconn.get_event(Events.ALARM_TRIGGERED.value).split(',')
+            timestamp = data[0]  # First element is the timestamp
+            self.alarm_events.append({
+                'timestamp': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S'),
+                'data': data
+            })
+            print(f"[STATS] Alarm triggered at {timestamp}")
+        
+        # Check for suspicious activity events
+        while self.serverconn.check_event(Events.SUSPICIOUS_ACTIVITY_STARTED.value):
+            data = self.serverconn.get_event(Events.SUSPICIOUS_ACTIVITY_STARTED.value).split(',')
+            timestamp = data[0]  # First element is the timestamp
+            self.suspicious_activities.append({
+                'timestamp': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S'),
+                'data': data
+            })
+            print(f"[STATS] Suspicious activity detected at {timestamp}")
+    
+    def get_stats_summary(self):
+        return {
+            'total_alarms': len(self.alarm_events),
+            'total_suspicious_activities': len(self.suspicious_activities),
+            'alarm_events': self.alarm_events,
+            'suspicious_activities': self.suspicious_activities
+        }
+
+    def create_response_time_graph(self):
+        """Creates a graph showing response times between suspicious activities and alarms"""
+        import matplotlib.pyplot as plt
+        from datetime import timedelta
+
+        response_times = []
+        false_positives = []
+        matched_alarms = set()
+
+        # Calculate response times and identify false positives
+        for alarm in self.alarm_events:
+            alarm_time = alarm['timestamp']
+            # Find the closest previous suspicious activity
+            closest_activity = None
+            min_time_diff = timedelta(minutes=5)  # Max 5 minutes response time threshold
+
+            for activity in self.suspicious_activities:
+                if activity['timestamp'] < alarm_time:
+                    time_diff = alarm_time - activity['timestamp']
+                    if time_diff < min_time_diff:
+                        min_time_diff = time_diff
+                        closest_activity = activity
+
+            if closest_activity:
+                response_times.append((len(response_times), min_time_diff.total_seconds()))
+                matched_alarms.add(alarm_time)
+            else:
+                false_positives.append(alarm_time)
+
+        # Create response time graph
+        plt.figure(figsize=(12, 6))
+        if response_times:
+            x, y = zip(*response_times)
+            plt.plot(x, y, 'b-', label='Response Time')
+            
+            # Calculate and plot average response time
+            avg_response_time = sum(y) / len(y)
+            plt.axhline(y=avg_response_time, color='r', linestyle='--', 
+                       label=f'Average: {avg_response_time:.2f}s')
+        
+        plt.xlabel("Alarm Number")
+        plt.ylabel("Response Time (seconds)")
+        plt.title("Alarm Response Times")
+        plt.legend()
+        plt.grid(True)
+        plt.savefig("response_times.png")
+        plt.close()
+
+        # Create false positives graph
+        plt.figure(figsize=(8, 6))
+        labels = ['Valid Alarms', 'False Positives']
+        sizes = [len(matched_alarms), len(false_positives)]
+        colors = ['lightgreen', 'lightcoral']
+        
+        plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%')
+        plt.title("Alarm Accuracy Analysis")
+        plt.savefig("false_positives.png")
+        plt.close()
+
+        return {
+            'average_response_time': sum(y for _, y in response_times) / len(response_times) if response_times else 0,
+            'false_positive_rate': len(false_positives) / len(self.alarm_events) if self.alarm_events else 0,
+            'total_alarms': len(self.alarm_events),
+            'valid_alarms': len(matched_alarms),
+            'false_positives': len(false_positives)
+        }
+
+
 class Simulation():
     def __init__(self, iterations=1000, dt=1):
         self.serverconn = EventEmitter()
         self.drone = DroneAgent(self.serverconn)
         self.guard = GuardAgent(self.drone, self.serverconn)
+        self.stats = Stats(self.serverconn)  # Initialize stats tracking
         self.iterations = iterations
         self.current_iterations = 0
         self.dt = dt
@@ -391,13 +502,31 @@ class Simulation():
         print("[DEBUG] Starting simulation")
         
         while self.current_iterations < self.iterations:
-            self.current_iterations += 1
-            print(f"[DEBUG] Simulation iteration {self.current_iterations}")
             self.drone.step()
             self.guard.step()
+            self.stats.update_stats()  # Update stats each iteration
+            
+            self.current_iterations += 1
             time.sleep(self.dt)
+
+        stats_summary = self.stats.get_stats_summary()
+        response_time_graph = self.stats.create_response_time_graph()
+        print("[DEBUG] Simulation completed")
+        
+        # Print key metrics
+        print("\n=== Simulation Results ===")
+        print(f"Total Alarms: {response_time_graph['total_alarms']}")
+        print(f"Valid Alarms: {response_time_graph['valid_alarms']}")
+        print(f"False Positives: {response_time_graph['false_positives']}")
+        print(f"False Positive Rate: {response_time_graph['false_positive_rate']*100:.1f}%")
+        if response_time_graph['average_response_time'] > 0:
+            print(f"Average Response Time: {response_time_graph['average_response_time']:.2f} seconds")
+        print(f"Total Suspicious Activities: {stats_summary['total_suspicious_activities']}")
+        print("=======================\n")
+        
+        return stats_summary, response_time_graph
 
 
 if __name__ == "__main__":
-    simulation = Simulation(60, 5)
+    simulation = Simulation(50, 5)
     simulation.run()

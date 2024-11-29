@@ -45,6 +45,9 @@ public class AlarmAudioScript : MonoBehaviour
 
             // Mark alarm as triggered
             alarmTriggered = true;
+
+            // Send alarm triggered event with timestamp
+            connection.SendEvent("alarm_triggered", new string[] { System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") });
         });
     }
 
@@ -72,6 +75,11 @@ public class AlarmAudioScript : MonoBehaviour
                 // Place the suspicious man at the next position
                 suspiciousMan.transform.position = positions[nextPosition];
                 suspiciousMan.SetActive(true);
+
+                // Send suspicious activity event with timestamp and position
+                SocketClient.Instance.SendEvent("suspicious_activity_started", new string[] { 
+                    System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                });
 
                 // Update the next position
                 nextPosition = (nextPosition + 1) % positions.Length;
